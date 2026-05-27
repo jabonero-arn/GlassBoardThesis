@@ -1,0 +1,113 @@
+{
+  "entities": {
+    "Admin": {
+      "title": "Admin",
+      "description": "Administrator profile",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "fullName": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "fullName", "role", "createdAt", "updatedAt"]
+    },
+    "User": {
+      "title": "User",
+      "description": "User profile containing role and approval status",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "fullName": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "user"] },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "fullName", "role", "status", "createdAt", "updatedAt"]
+    },
+    "Device": {
+      "title": "Device",
+      "description": "Raspberry Pi device",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "status": { "type": "string", "enum": ["online", "offline", "capturing"] },
+        "createdBy": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "status"]
+    },
+    "Folder": {
+      "title": "Folder",
+      "description": "User's folder to organize archives",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "userId": { "type": "string" },
+        "isDeleted": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "userId", "isDeleted", "createdAt", "updatedAt"]
+    },
+    "DeviceCaptureRequest": {
+      "title": "Device Capture Request",
+      "description": "Command queue for Raspberry Pi to take a picture",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "deviceId": { "type": "string" },
+        "folderId": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "completed", "failed"] },
+        "imageUrl": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "deviceId", "folderId", "status", "createdAt", "updatedAt"]
+    },
+    "Image": {
+      "title": "Image",
+      "description": "Captured image metadata",
+      "type": "object",
+      "properties": {
+        "folderId": { "type": "string" },
+        "userId": { "type": "string" },
+        "deviceId": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "isDeleted": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["folderId", "userId", "imageUrl", "isDeleted", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "admins/{adminId}": {
+      "schema": { "$ref": "#/entities/Admin" },
+      "description": "Administrator accounts"
+    },
+    "users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Users of the application"
+    },
+    "devices/{deviceId}": {
+      "schema": { "$ref": "#/entities/Device" },
+      "description": "Registered Raspberry Pi units"
+    },
+    "folders/{folderId}": {
+      "schema": { "$ref": "#/entities/Folder" },
+      "description": "User created folders"
+    },
+    "captureRequests/{requestId}": {
+      "schema": { "$ref": "#/entities/DeviceCaptureRequest" },
+      "description": "Queue for requests to capture images via hardware"
+    },
+    "images/{imageId}": {
+      "schema": { "$ref": "#/entities/Image" },
+      "description": "Stored image metadata"
+    }
+  }
+}

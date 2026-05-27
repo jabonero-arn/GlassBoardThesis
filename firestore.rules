@@ -1,0 +1,103 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Basic helper functions
+    function isSignedIn() { return request.auth != null; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    
+    function isAdmin() {
+      return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    function isApproved() {
+      // Allow if admin or approved user
+      return isAdmin() || (isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'approved');
+    }
+
+    // Default deny ALL
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    match /admins/{adminId} {
+      allow read, update, delete: if isAdmin();
+      allow create: if isSignedIn() && request.auth.uid == adminId && request.auth.token.email == 'admin@test.com';
+    }
+
+    match /users/{userId} {
+      // Anyone signed in can read themselves; Admins can read all.
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      
+      // Users can create their own profile, MUST be 'pending' and 'user' roles initially unless they are some override config.
+      allow create: if isSignedIn() 
+        && request.auth.uid == userId 
+        && incoming().status == 'pending' 
+        && incoming().role == 'user'
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+        
+      // Admin can update users (e.g. status)
+      // Users can't update themselves right now (except maybe profile info, but keep simple)
+      allow update: if isAdmin();
+    }
+
+    match /devices/{deviceId} {
+      // Approved users can view devices
+      allow read: if isApproved();
+      
+      // Only admins can create/update devices
+      allow write: if isAdmin();
+    }
+
+    match /folders/{folderId} {
+      // Users can read/write their own folders. The Pi scripts run as admin so they can access too.
+      // But rules only apply to client SDKs.
+      allow read: if isApproved() && existing().userId == request.auth.uid;
+      
+      allow create: if isApproved()
+        && incoming().userId == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+        
+      allow update: if isApproved()
+        && existing().userId == request.auth.uid
+        && incoming().userId == existing().userId
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'isDeleted', 'updatedAt']);
+    }
+
+    match /images/{imageId} {
+      allow read: if isApproved() && existing().userId == request.auth.uid;
+      
+      // The Pi does the creation of images, so users should only need to update (soft delete)
+      allow update: if isApproved()
+        && existing().userId == request.auth.uid
+        && incoming().userId == existing().userId
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['isDeleted', 'updatedAt']);
+        
+      // Let users create in case they manually upload something, or we keep it strict to Pi uploads only (admin).
+      allow create: if isApproved()
+        && incoming().userId == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+    }
+
+    match /captureRequests/{requestId} {
+      allow read: if isApproved() && existing().userId == request.auth.uid;
+      
+      allow create: if isApproved()
+        && incoming().userId == request.auth.uid
+        && incoming().status == 'pending'
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+        
+      // Allow users to update their own in case they cancel, but mostly Pi handles it.
+      allow update: if isApproved()
+        && existing().userId == request.auth.uid;
+    }
+  }
+}

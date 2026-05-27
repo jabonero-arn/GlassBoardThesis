@@ -1,0 +1,8 @@
+{
+  "name": "Digital Archive IoT System",
+  "description": "A digital archiving system integrating Raspberry Pi cameras, with user folders, a trash bin, and an admin dashboard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
