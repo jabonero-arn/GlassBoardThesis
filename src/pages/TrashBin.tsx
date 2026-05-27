@@ -115,7 +115,7 @@ export default function TrashBin({ user }: { user: User }) {
 
   return (
     <div className="flex flex-col h-full bg-slate-50">
-      <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 flex-shrink-0">
+      <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 sm:px-8 flex-shrink-0">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 text-sm text-slate-400">
             <span>Archives</span>
@@ -125,7 +125,7 @@ export default function TrashBin({ user }: { user: User }) {
         </div>
       </header>
 
-      <div className="flex-1 p-8 overflow-auto space-y-8">
+      <div className="flex-1 p-4 sm:p-8 overflow-auto space-y-8">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-slate-800">Deleted Items</h2>
         </div>

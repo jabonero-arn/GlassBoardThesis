@@ -67,6 +67,57 @@ export default function FolderView({ user }: { user: User }) {
     };
   }, [folderId]);
 
+  // Continuous background query checking for new image records (solves any real-time websocket silence issues)
+  useEffect(() => {
+    if (!folderId) return;
+
+    const intervalId = setInterval(() => {
+      fetchImages();
+    }, 3000);
+
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [folderId]);
+
+  // Fast status query polling while camera is capturing to instantly detect completed jobs
+  useEffect(() => {
+    if (!capturing || !folderId || !selectedDevice) return;
+
+    const checkActiveRequests = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('captureRequests')
+          .select('id, status')
+          .eq('folderId', folderId)
+          .eq('deviceId', selectedDevice)
+          .in('status', ['pending', 'processing'])
+          .order('createdAt', { ascending: false })
+          .limit(1);
+
+        if (error) {
+          console.error("Error polling capture requests:", error);
+          return;
+        }
+
+        // If no pending or processing requests remain, the capture has finished or failed
+        if (!data || data.length === 0) {
+          console.log("No pending or processing requests remaining. Resetting loading state.");
+          setCapturing(false);
+          fetchImages();
+        }
+      } catch (err) {
+        console.error("Failed checking capture status:", err);
+      }
+    };
+
+    const checkerId = setInterval(checkActiveRequests, 1200);
+
+    return () => {
+      clearInterval(checkerId);
+    };
+  }, [capturing, folderId, selectedDevice]);
+
   // Listen for keyboard controls when image viewing modal is open
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -334,7 +385,7 @@ export default function FolderView({ user }: { user: User }) {
 
   return (
     <div className="flex flex-col h-full bg-slate-50">
-      <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 flex-shrink-0">
+      <header className="min-h-16 h-auto py-3 md:py-0 md:h-16 bg-white border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between px-4 sm:px-8 gap-3 flex-shrink-0">
         <div className="flex items-center gap-4">
           <Link to="/dashboard" className="p-2 -ml-2 text-slate-400 hover:text-slate-900 transition-colors">
             <ArrowLeft className="w-5 h-5" />
@@ -342,26 +393,26 @@ export default function FolderView({ user }: { user: User }) {
           <div className="flex items-center gap-2 text-sm text-slate-400">
             <span>Archives</span>
             <span>/</span>
-            <span className="text-slate-900 font-medium">{folder.name}</span>
+            <span className="text-slate-900 font-medium truncate max-w-[120px] sm:max-w-none">{folder.name}</span>
           </div>
         </div>
-        <div className="flex items-center gap-6">
-          <div className="flex flex-col items-end">
-            <span className="text-[10px] text-slate-400 font-bold uppercase">IoT Gateway Status</span>
+        <div className="flex flex-wrap sm:flex-nowrap items-center justify-between md:justify-end gap-3 sm:gap-6 w-full md:w-auto border-t md:border-t-0 pt-2 md:pt-0">
+          <div className="flex flex-col items-start md:items-end">
+            <span className="text-[9px] sm:text-[10px] text-slate-400 font-bold uppercase">IoT Gateway Status</span>
             <div className="flex items-center gap-1.5">
               <div className={`w-2 h-2 rounded-full ${selectedDevice ? 'bg-emerald-500' : 'bg-slate-300'}`}></div>
-              <span className="text-xs font-medium text-slate-700">{selectedDevice ? 'Cloud Connected' : 'Waiting...'}</span>
+              <span className="text-xs font-semibold text-slate-700">{selectedDevice ? 'Cloud Connected' : 'Waiting...'}</span>
             </div>
           </div>
-          <div className="h-8 w-[1px] bg-slate-200"></div>
-          <div className="flex items-center gap-3">
-            <label className="text-xs font-bold text-slate-500 uppercase">Device Selection</label>
+          <div className="hidden sm:block h-8 w-[1px] bg-slate-200"></div>
+          <div className="flex items-center gap-2 sm:gap-3 flex-1 sm:flex-initial justify-end">
+            <label className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase shrink-0">Device</label>
             <select 
                value={selectedDevice} 
                onChange={(e) => setSelectedDevice(e.target.value)}
-               className="bg-slate-50 border border-slate-200 rounded px-3 py-1.5 text-xs font-medium focus:ring-2 focus:ring-indigo-500 outline-none"
+               className="bg-slate-55 border border-slate-200 rounded px-2 md:px-3 py-1.5 text-xs font-semibold focus:ring-2 focus:ring-indigo-500 outline-none max-w-[160px] sm:max-w-xs truncate"
              >
-               <option value="" disabled>--- Select a connected Pi ---</option>
+               <option value="" disabled>--- Select Pi ---</option>
                {devices.map(d => (
                  <option key={d.id} value={d.id}>{d.name} {d.status === 'offline' ? '(Offline)' : ''}</option>
                ))}
@@ -370,16 +421,16 @@ export default function FolderView({ user }: { user: User }) {
         </div>
       </header>
 
-      <div className="flex-1 p-8 grid grid-cols-12 gap-6 overflow-hidden">
-        <section className="col-span-12 flex flex-col pr-4 pb-10 overflow-y-auto">
-          <div className="flex items-center justify-between mb-4 flex-shrink-0">
+      <div className="flex-1 p-4 sm:p-8 flex flex-col space-y-6 overflow-y-auto">
+        <section className="w-full flex flex-col pb-10">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 flex-shrink-0">
             <h2 className="text-lg font-semibold text-slate-800">Archive Contents</h2>
-            <div className="flex gap-3 items-center">
+            <div className="flex flex-wrap gap-2.5 items-center w-full md:w-auto">
               <label 
-                className="cursor-pointer px-4 py-1.5 border border-slate-200 bg-white rounded text-xs font-bold text-slate-600 hover:bg-slate-50 transition-colors flex items-center gap-2 shadow-xs"
+                className="cursor-pointer flex-1 md:flex-initial px-3 py-2 border border-slate-200 bg-white rounded text-xs font-bold text-slate-600 hover:bg-slate-50 transition-colors flex items-center justify-center gap-2 shadow-xs"
               >
                 {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4 text-slate-400" />}
-                {uploading ? 'UPLOADING...' : 'UPLOAD IMAGE'}
+                <span className="truncate">{uploading ? 'UPLOADING...' : 'UPLOAD IMAGE'}</span>
                 <input 
                   type="file" 
                   accept="image/*" 
@@ -389,12 +440,11 @@ export default function FolderView({ user }: { user: User }) {
                 />
               </label>
 
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider hidden sm:inline">Capture Mode:</span>
+              <div className="flex items-center gap-2 flex-1 md:flex-initial">
                 <select
                   value={captureMode}
                   onChange={(e) => setCaptureMode(e.target.value as 'simulate' | 'hardware')}
-                  className="bg-white border border-slate-200 text-slate-700 rounded px-2.5 py-1.5 text-xs font-semibold focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer"
+                  className="w-full bg-white border border-slate-200 text-slate-700 rounded px-2.5 py-2 text-xs font-semibold focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer"
                 >
                   <option value="hardware">Raspberry Pi (Real Hardware)</option>
                   <option value="simulate">Simulator (Browser Mock)</option>
@@ -404,10 +454,10 @@ export default function FolderView({ user }: { user: User }) {
               <button 
                 onClick={handleCapture}
                 disabled={!selectedDevice || capturing}
-                className="px-4 py-1.5 bg-indigo-600 text-white rounded text-xs font-bold shadow-xs flex items-center gap-2 hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                className="flex-1 md:flex-initial px-3 py-2 bg-indigo-600 text-white rounded text-xs font-bold shadow-xs flex items-center justify-center gap-2 hover:bg-indigo-700 disabled:opacity-50 transition-colors"
               >
-                {capturing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
-                TRIGGER CAPTURE
+                {capturing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4 underline-offset-4" />}
+                <span className="truncate">TRIGGER CAPTURE</span>
               </button>
             </div>
           </div>
