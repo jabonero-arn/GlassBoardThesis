@@ -41,7 +41,12 @@ export default function FolderView({ user }: { user: User }) {
 
   const fetchDevices = async () => {
     const { data: dData } = await supabase.from('devices').select('*');
-    if (dData) setDevices(dData);
+    if (dData) {
+      setDevices(dData);
+      if (dData.length > 0 && !selectedDevice) {
+        setSelectedDevice(dData[0].id);
+      }
+    }
   };
 
   const fetchUserFolders = async () => {
