@@ -13,6 +13,7 @@ export default function FolderView({ user }: { user: User }) {
   const [images, setImages] = useState<any[]>([]);
   const [selectedDevice, setSelectedDevice] = useState<string>('');
   const [capturing, setCapturing] = useState(false);
+  const [activeCaptureId, setActiveCaptureId] = useState<string | null>(null);
   const [captureMode, setCaptureMode] = useState<'simulate' | 'hardware'>('hardware');
   const [uploading, setUploading] = useState(false);
   const [showStorageGuide, setShowStorageGuide] = useState(false);
@@ -87,28 +88,26 @@ export default function FolderView({ user }: { user: User }) {
 
   // Fast status query polling while camera is capturing to instantly detect completed jobs
   useEffect(() => {
-    if (!capturing || !folderId || !selectedDevice) return;
+    if (!capturing || !activeCaptureId) return;
 
     const checkActiveRequests = async () => {
       try {
         const { data, error } = await supabase
           .from('captureRequests')
           .select('id, status')
-          .eq('folderId', folderId)
-          .eq('deviceId', selectedDevice)
-          .in('status', ['pending', 'processing'])
-          .order('createdAt', { ascending: false })
-          .limit(1);
+          .eq('id', activeCaptureId)
+          .single();
 
-        if (error) {
+        if (error && error.code !== 'PGRST116') {
           console.error("Error polling capture requests:", error);
           return;
         }
 
-        // If no pending or processing requests remain, the capture has finished or failed
-        if (!data || data.length === 0) {
-          console.log("No pending or processing requests remaining. Resetting loading state.");
+        // If the specific request is no longer pending/processing, or doesn't exist
+        if (!data || !['pending', 'processing'].includes(data.status)) {
+          console.log("Capture request finished or failed. Resetting loading state.");
           setCapturing(false);
+          setActiveCaptureId(null);
           fetchImages();
         }
       } catch (err) {
@@ -121,7 +120,7 @@ export default function FolderView({ user }: { user: User }) {
     return () => {
       clearInterval(checkerId);
     };
-  }, [capturing, folderId, selectedDevice]);
+  }, [capturing, activeCaptureId]);
 
   // Listen for keyboard controls when image viewing modal is open
   useEffect(() => {
@@ -328,14 +327,18 @@ export default function FolderView({ user }: { user: User }) {
         // If we didn't find an image after polling, something might have failed. We will fall through and request a new capture.
       }
 
-      await supabase.from('captureRequests').insert({
+      const { data: newCapture } = await supabase.from('captureRequests').insert({
         userId: user.id,
         deviceId: selectedDevice,
         folderId: folderId,
         status: 'pending',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
-      });
+      }).select('id').single();
+
+      if (newCapture) {
+        setActiveCaptureId(newCapture.id);
+      }
 
       const deviceObj = devices.find(d => d.id === selectedDevice);
       
@@ -377,6 +380,7 @@ export default function FolderView({ user }: { user: User }) {
         alert('Capture command sent! Simulated browser capture uploaded to Supabase Storage.');
         fetchImages();
         setCapturing(false);
+        setActiveCaptureId(null);
       } else {
         logActivity(user.id, user.email || 'user', 'capture_image_request', `Dispatched physical action trigger event to hardware node '${deviceObj?.name || 'IoT Gateway'}'`);
         
@@ -385,6 +389,7 @@ export default function FolderView({ user }: { user: User }) {
           setCapturing(current => {
             if (current) {
               alert(`The hardware device "${deviceObj?.name || 'Raspberry Pi'}" is taking longer than usual to respond. Please make sure your Python listener script is active and running on the Pi.`);
+              setActiveCaptureId(null);
               return false;
             }
             return current;
@@ -398,6 +403,7 @@ export default function FolderView({ user }: { user: User }) {
         setShowStorageGuide(true);
       }
       setCapturing(false);
+      setActiveCaptureId(null);
     }
   };
 
