@@ -14,7 +14,7 @@ interface LayoutProps {
 
 export default function Layout({ user, role, fullName }: LayoutProps) {
   const navigate = useNavigate();
-  const [logsOpen, setLogsOpen] = useState(window.innerWidth > 1024);
+  const [logsOpen, setLogsOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -123,7 +123,7 @@ export default function Layout({ user, role, fullName }: LayoutProps) {
             <div className="w-8 h-8 bg-indigo-500 rounded flex items-center justify-center text-white font-bold">
               <Aperture className="w-5 h-5" />
             </div>
-            <span className="text-white font-semibold tracking-tight text-lg">Archivio IoT</span>
+            <span className="text-white font-semibold tracking-tight text-lg">Glass Board Web</span>
           </div>
           {/* Close button for mobile menu */}
           <button 
@@ -206,7 +206,7 @@ export default function Layout({ user, role, fullName }: LayoutProps) {
             <div className="w-6 h-6 bg-indigo-500 rounded flex items-center justify-center text-white">
               <Aperture className="w-3.5 h-3.5" />
             </div>
-            <span className="font-semibold tracking-tight text-sm">Archivio IoT</span>
+            <span className="font-semibold tracking-tight text-sm">Glass Board Web</span>
           </div>
 
           <button 

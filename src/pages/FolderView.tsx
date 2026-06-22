@@ -273,6 +273,61 @@ export default function FolderView({ user }: { user: User }) {
     setCapturing(true);
     setStorageErrorText('');
     try {
+      // Check for a recent capture request on this same device within the last 15 seconds
+      const recentTimeThreshold = new Date(Date.now() - 15000).toISOString();
+      const { data: recentReq } = await supabase
+        .from('captureRequests')
+        .select('*')
+        .eq('deviceId', selectedDevice)
+        .gte('createdAt', recentTimeThreshold)
+        .order('createdAt', { ascending: false })
+        .limit(1);
+
+      if (recentReq && recentReq.length > 0) {
+        const prevCapture = recentReq[0];
+        
+        let foundImageUrl = "";
+        
+        // Wait and poll for up to 15 seconds to see if the original capture generated an image
+        for (let attempts = 0; attempts < 15; attempts++) {
+          const { data: latestImg } = await supabase
+              .from('images')
+              .select('imageUrl, createdAt')
+              .eq('folderId', prevCapture.folderId)
+              .gte('createdAt', prevCapture.createdAt)
+              .order('createdAt', { ascending: false })
+              .limit(1);
+           
+           if (latestImg && latestImg.length > 0) {
+               foundImageUrl = latestImg[0].imageUrl;
+               break;
+           }
+           
+           // Wait 1 second before polling again
+           await new Promise(r => setTimeout(r, 1000));
+        }
+
+        if (foundImageUrl) {
+           // If the previous request was submitted from a different folder, we need to clone the image into THIS folder
+           if (folderId !== prevCapture.folderId) {
+             await supabase.from('images').insert({
+               folderId: folderId,
+               userId: user.id,
+               imageUrl: foundImageUrl,
+               isDeleted: false,
+               createdAt: new Date().toISOString(),
+               updatedAt: new Date().toISOString()
+             });
+           }
+           
+           logActivity(user.id, user.email || 'user', 'capture_image_request', `Shared a recent camera capture initiated within the 15-second time interval`);
+           fetchImages();
+           setCapturing(false);
+           return;
+        }
+        // If we didn't find an image after polling, something might have failed. We will fall through and request a new capture.
+      }
+
       await supabase.from('captureRequests').insert({
         userId: user.id,
         deviceId: selectedDevice,

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Check, X, Trash2, Plus, MonitorSmartphone } from 'lucide-react';
+import { Trash2, Plus, MonitorSmartphone } from 'lucide-react';
 import { logActivity } from '../lib/logger';
 import ConfirmModal from '../components/ConfirmModal';
 
@@ -32,7 +32,11 @@ export default function AdminDashboard() {
   };
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    supabase.auth.getUser().then(({ data: { user }, error }) => {
+      if (error && error.message.toLowerCase().includes('refresh token')) {
+          localStorage.removeItem('sb-tspopbrylewcirzyholi-auth-token'); 
+          supabase.auth.signOut();
+      }
       if (user) setAdminUser(user);
     });
 
@@ -51,28 +55,6 @@ export default function AdminDashboard() {
       supabase.removeChannel(usersChannel);
     };
   }, []);
-
-  const handleApprove = async (userId: string) => {
-    const target = users.find(u => u.id === userId);
-    const { error } = await supabase.from('users').update({ status: 'approved', updatedAt: new Date().toISOString() }).eq('id', userId);
-    if (!error) {
-      if (adminUser) {
-        logActivity(adminUser.id, adminUser.email || 'admin', 'approve_user', `Approved user registration for '${target?.fullName || target?.email || 'Anonymous user'}'`);
-      }
-      fetchAdminData();
-    }
-  };
-
-  const handleReject = async (userId: string) => {
-    const target = users.find(u => u.id === userId);
-    const { error } = await supabase.from('users').update({ status: 'rejected', updatedAt: new Date().toISOString() }).eq('id', userId);
-    if (!error) {
-      if (adminUser) {
-        logActivity(adminUser.id, adminUser.email || 'admin', 'reject_user', `Rejected user registration for '${target?.fullName || target?.email || 'Anonymous user'}'`);
-      }
-      fetchAdminData();
-    }
-  };
 
   const handleAddDevice = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -127,8 +109,8 @@ export default function AdminDashboard() {
           {/* User Management */}
           <section className="bg-white border border-slate-200 rounded-xl shadow-sm p-5 flex flex-col">
             <div className="mb-4">
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Pending Approvals</h3>
-              <p className="text-[10px] text-slate-500 mt-1">Review account access requests</p>
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Registered Users</h3>
+              <p className="text-[10px] text-slate-500 mt-1">List of registered active users</p>
             </div>
             <div className="space-y-3 overflow-y-auto max-h-[500px]">
               {users.length === 0 ? (
@@ -137,20 +119,10 @@ export default function AdminDashboard() {
                 <div key={user.id} className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-100">
                   <div className="flex flex-col">
                     <span className="text-sm font-semibold text-slate-800">{user.email}</span>
-                    <span className={`text-[10px] font-bold uppercase tracking-wider mt-0.5 ${user.status === 'pending' ? 'text-amber-500' : user.status === 'approved' ? 'text-emerald-500' : 'text-rose-500'}`}>
+                    <span className={`text-[10px] font-bold uppercase tracking-wider mt-0.5 ${user.status === 'active' ? 'text-emerald-500' : 'text-slate-500'}`}>
                       {user.status}
                     </span>
                   </div>
-                  {user.status === 'pending' && (
-                    <div className="flex gap-1">
-                      <button onClick={() => handleApprove(user.id)} className="p-1 text-emerald-600 hover:bg-emerald-50 rounded transition-colors" title="Approve">
-                        <Check className="w-5 h-5" />
-                      </button>
-                      <button onClick={() => handleReject(user.id)} className="p-1 text-rose-600 hover:bg-rose-50 rounded transition-colors" title="Reject">
-                        <X className="w-5 h-5" />
-                      </button>
-                    </div>
-                  )}
                 </div>
               ))}
             </div>

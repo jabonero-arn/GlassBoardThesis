@@ -25,6 +25,22 @@ export default function Login() {
            setError('Passwords do not match.');
            return;
          }
+
+         const isAdminEmail = cleanEmail === 'admin@test.com' || cleanEmail === 'christianjayefernan@gmail.com';
+
+         // Check against pre-approved student emails if not an admin
+         if (!isAdminEmail) {
+           const { data: allowedEmail, error: allowedError } = await supabase
+             .from('allowed_emails')
+             .select('email')
+             .eq('email', cleanEmail)
+             .maybeSingle();
+
+           if (!allowedEmail) {
+             setError('Signup declined: Your email is not on the pre-approved student list provided by the school.');
+             return;
+           }
+         }
          
          const { data, error: authError } = await supabase.auth.signUp({
            email,
@@ -47,7 +63,6 @@ export default function Login() {
          }
 
          if (data?.user) {
-           const isAdminEmail = cleanEmail === 'admin@test.com' || cleanEmail === 'christianjayefernan@gmail.com';
            if (isAdminEmail) {
              const { error: profileError } = await supabase.from('admins').insert({
                 id: data.user.id,
@@ -66,7 +81,7 @@ export default function Login() {
                 email: cleanEmail,
                 fullName,
                 role: 'user',
-                status: 'pending',
+                status: 'active', // Automatically active since they are pre-approved
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString()
              });
@@ -101,10 +116,10 @@ export default function Login() {
           <div className="w-16 h-16 bg-indigo-50 rounded-full flex items-center justify-center text-indigo-600 font-bold text-2xl mx-auto mb-6">
             ✓
           </div>
-          <h1 className="text-2xl font-bold mb-3 tracking-tight text-slate-800">Signup Received</h1>
+          <h1 className="text-2xl font-bold mb-3 tracking-tight text-slate-800">Signup Successful</h1>
           <p className="text-slate-600 mb-8 text-sm leading-relaxed">
-            Thanks for signing up on <strong>Glass Board Archiving</strong>! <br />
-            Please wait for the account confirmation. Your registration request is currently pending administrator approval.
+            Welcome to <strong>Glass Board Archiving</strong>! <br />
+            Your account has been successfully registered and automatically activated based on the school's authorized list. You can now sign in.
           </p>
           <button 
             onClick={() => {

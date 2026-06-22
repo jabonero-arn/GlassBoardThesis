@@ -24,7 +24,14 @@ export default function App() {
 
   useEffect(() => {
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (error) {
+        console.warn("Session error:", error.message);
+        if (error.message.toLowerCase().includes("refresh token")) {
+          localStorage.removeItem('sb-tspopbrylewcirzyholi-auth-token'); 
+        }
+        supabase.auth.signOut();
+      }
       const currentUser = session?.user || null;
       setUser(currentUser);
       if (currentUser) {
@@ -35,12 +42,17 @@ export default function App() {
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      const currentUser = session?.user || null;
-      setUser(currentUser);
-      setError(null);
-      if (currentUser) {
-        await fetchProfile(currentUser);
-      } else {
+      if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        const currentUser = session?.user || null;
+        setUser(currentUser);
+        setError(null);
+        if (currentUser) {
+          await fetchProfile(currentUser);
+        } else {
+          setLoading(false);
+        }
+      } else if (event === 'SIGNED_OUT') {
+        setUser(null);
         setRole(null);
         setStatus(null);
         setFullName(null);
@@ -100,28 +112,28 @@ export default function App() {
             email: currentUser.email,
             fullName: currentUser.user_metadata?.fullName || 'User',
             role: 'user',
-            status: 'pending',
+            status: 'active',
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
           });
 
           if (!insertErr) {
             setRole('user');
-            setStatus('pending');
+            setStatus('active');
             setFullName(currentUser.user_metadata?.fullName || 'User');
           } else {
-            // Fallback: Just treat them as a pending user without crashing
+            // Fallback: Just treat them as a active user without crashing
             setRole('user');
-            setStatus('pending');
+            setStatus('active');
             setFullName('User');
           }
         }
       }
     } catch (err: any) {
-      console.error("Error fetching user data, falling back to guest/pending:", err);
-      // Fallback: Don't show blocking red screen, let them see Pending layout or sign out gracefully
+      console.error("Error fetching user data, falling back to guest/active:", err);
+      // Fallback: Don't show blocking red screen, let them see Dashboard layout or sign out gracefully
       setRole('user');
-      setStatus('pending');
+      setStatus('active');
       setFullName('User');
     } finally {
       setLoading(false);
@@ -133,6 +145,11 @@ export default function App() {
   }
 
   if (error) {
+    if (error.toLowerCase().includes("refresh token")) {
+      supabase.auth.signOut();
+      setError(null);
+      return <div className="min-h-screen flex items-center justify-center font-sans text-gray-500">Signing out...</div>;
+    }
     return (
       <div className="min-h-screen flex flex-col items-center justify-center font-sans bg-slate-50 text-slate-800 p-8">
         <div className="bg-white p-8 rounded-xl shadow-sm border border-rose-200 w-full max-w-md text-center">
@@ -152,12 +169,11 @@ export default function App() {
         <Route path="/" element={
           !user ? <Login /> : 
           role === 'admin' ? <Navigate to="/admin" /> : 
-          status === 'pending' ? <PendingApproval /> :
-          (role === 'user' && status === 'approved') ? <Navigate to="/dashboard" /> :
+          (role === 'user') ? <Navigate to="/dashboard" /> :
           <div className="min-h-screen flex items-center justify-center">Unknown Role/Status</div>
         } />
         
-        {user && status === 'approved' && role === 'user' && (
+        {user && role === 'user' && (
           <Route element={<Layout user={user} role={role} fullName={fullName} />}>
             <Route path="/dashboard" element={<UserDashboard user={user} />} />
             <Route path="/dashboard/folder/:folderId" element={<FolderView user={user} />} />
@@ -175,29 +191,6 @@ export default function App() {
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </Router>
-  );
-}
-
-function PendingApproval() {
-  return (
-    <div className="min-h-screen flex flex-col items-center justify-center font-sans bg-gray-50 text-gray-800 p-4">
-      <div className="bg-white p-8 rounded-xl shadow-xs border border-gray-100 max-w-md text-center">
-        <div className="w-16 h-16 bg-yellow-50 rounded-full flex items-center justify-center text-yellow-600 font-bold text-2xl mx-auto mb-6">
-          🕒
-        </div>
-        <h2 className="text-2xl font-bold mb-3 text-slate-800 tracking-tight">Account Pending</h2>
-        <p className="text-slate-500 mb-8 text-sm leading-relaxed">
-          Thanks for signing up on <strong>Glass Board Archiving</strong>! <br />
-          Please wait for the account confirmation. Your account is currently pending administrator approval.
-        </p>
-        <button 
-          onClick={() => supabase.auth.signOut()} 
-          className="w-full px-4 py-2 bg-indigo-600 text-white rounded text-sm font-bold uppercase tracking-wider hover:bg-indigo-700 transition-colors"
-        >
-          Sign out
-        </button>
-      </div>
-    </div>
   );
 }
 
