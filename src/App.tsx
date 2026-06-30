@@ -57,13 +57,13 @@ export default function App() {
 
     initializeAuth();
     
-    // Safety fallback: if anything hangs, stop loading after 3s
+    // Safety fallback: if anything hangs, stop loading after 8s
     fallbackTimeout = setTimeout(() => {
       if (active) {
         console.warn("Auth initialization timed out, forcing load to finish.");
         setLoading(false);
       }
-    }, 3000);
+    }, 8000);
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!active) return;
@@ -171,7 +171,7 @@ export default function App() {
   };
 
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center font-sans text-gray-500">Loading App...</div>;
+    return <div className="min-h-screen flex items-center justify-center font-sans text-gray-500">Loading...</div>;
   }
 
   if (error) {
