@@ -23,26 +23,46 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
-      if (error) {
-        console.warn("Session error:", error.message);
-        if (error.message.toLowerCase().includes("refresh token")) {
-          localStorage.removeItem('sb-tspopbrylewcirzyholi-auth-token'); 
+    let active = true;
+
+    const initializeAuth = async () => {
+      try {
+        const { data: { session }, error: sessionErr } = await supabase.auth.getSession();
+        if (!active) return;
+
+        if (sessionErr) {
+          console.warn("Session error:", sessionErr.message);
+          if (sessionErr.message.toLowerCase().includes("refresh token")) {
+            localStorage.removeItem('sb-tspopbrylewcirzyholi-auth-token'); 
+          }
+          await supabase.auth.signOut();
+          setUser(null);
+          setLoading(false);
+          return;
         }
-        supabase.auth.signOut();
+
+        const currentUser = session?.user || null;
+        setUser(currentUser);
+        if (currentUser) {
+          await fetchProfile(currentUser);
+        } else {
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error("Auth initialization error:", err);
+        if (active) {
+          setLoading(false);
+        }
       }
-      const currentUser = session?.user || null;
-      setUser(currentUser);
-      if (currentUser) {
-        fetchProfile(currentUser);
-      } else {
-        setLoading(false);
-      }
-    });
+    };
+
+    initializeAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+      if (!active) return;
+      
+      // Handle actual login, token refresh, or sign out changes
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         const currentUser = session?.user || null;
         setUser(currentUser);
         setError(null);
@@ -60,7 +80,10 @@ export default function App() {
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const fetchProfile = async (currentUser: User) => {
