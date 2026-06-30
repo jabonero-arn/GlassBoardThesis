@@ -9,6 +9,7 @@ import ConfirmModal from '../components/ConfirmModal';
 export default function FolderView({ user }: { user: User }) {
   const { folderId } = useParams();
   const [folder, setFolder] = useState<any>(null);
+  const [folderError, setFolderError] = useState<string | null>(null);
   const [devices, setDevices] = useState<any[]>([]);
   const [images, setImages] = useState<any[]>([]);
   const [selectedDevice, setSelectedDevice] = useState<string>('');
@@ -28,8 +29,15 @@ export default function FolderView({ user }: { user: User }) {
 
   const fetchFolderDetails = async () => {
     if (!folderId) return;
-    const { data: fData } = await supabase.from('folders').select('*').eq('id', folderId).maybeSingle();
-    if (fData) setFolder(fData);
+    const { data: fData, error } = await supabase.from('folders').select('*').eq('id', folderId).maybeSingle();
+    if (error) {
+      console.error(error);
+      setFolderError("Error loading folder");
+    } else if (fData) {
+      setFolder(fData);
+    } else {
+      setFolderError("Folder not found");
+    }
   };
 
   const fetchImages = async () => {
@@ -447,7 +455,8 @@ export default function FolderView({ user }: { user: User }) {
     setDestinationFolderId('');
   };
 
-  if (!folder) return <p className="text-gray-500">Loading folder...</p>;
+  if (folderError) return <div className="p-8 text-rose-500 font-medium">{folderError}</div>;
+  if (!folder) return <div className="min-h-screen flex items-center justify-center font-sans text-slate-500">Loading folder...</div>;
 
   return (
     <div className="flex flex-col h-full bg-slate-50">

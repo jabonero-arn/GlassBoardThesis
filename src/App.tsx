@@ -24,32 +24,31 @@ export default function App() {
 
   useEffect(() => {
     let active = true;
+    let fallbackTimeout: any;
 
     const initializeAuth = async () => {
       try {
         const { data: { session }, error: sessionErr } = await supabase.auth.getSession();
-        if (!active) return;
-
+        
         if (sessionErr) {
           console.warn("Session error:", sessionErr.message);
           if (sessionErr.message.toLowerCase().includes("refresh token")) {
             localStorage.removeItem('sb-tspopbrylewcirzyholi-auth-token'); 
           }
           await supabase.auth.signOut();
-          setUser(null);
-          setLoading(false);
+          if (active) setUser(null);
           return;
         }
 
         const currentUser = session?.user || null;
-        setUser(currentUser);
+        if (active) setUser(currentUser);
+        
         if (currentUser) {
           await fetchProfile(currentUser);
-        } else {
-          setLoading(false);
         }
       } catch (err) {
         console.error("Auth initialization error:", err);
+      } finally {
         if (active) {
           setLoading(false);
         }
@@ -57,11 +56,18 @@ export default function App() {
     };
 
     initializeAuth();
+    
+    // Safety fallback: if anything hangs, stop loading after 8s
+    fallbackTimeout = setTimeout(() => {
+      if (active) {
+        console.warn("Auth initialization timed out, forcing load to finish.");
+        setLoading(false);
+      }
+    }, 8000);
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!active) return;
       
-      // Handle actual login, token refresh, or sign out changes
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         const currentUser = session?.user || null;
         setUser(currentUser);
@@ -82,6 +88,7 @@ export default function App() {
 
     return () => {
       active = false;
+      clearTimeout(fallbackTimeout);
       subscription.unsubscribe();
     };
   }, []);
