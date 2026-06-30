@@ -23,6 +23,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let active = true;
     let fallbackTimeout: any;
 
     const initializeAuth = async () => {
@@ -35,12 +36,12 @@ export default function App() {
             localStorage.removeItem('sb-tspopbrylewcirzyholi-auth-token'); 
           }
           await supabase.auth.signOut();
-          setUser(null);
+          if (active) setUser(null);
           return;
         }
 
         const currentUser = session?.user || null;
-        setUser(currentUser);
+        if (active) setUser(currentUser);
         
         if (currentUser) {
           await fetchProfile(currentUser);
@@ -48,18 +49,25 @@ export default function App() {
       } catch (err) {
         console.error("Auth initialization error:", err);
       } finally {
-        setLoading(false);
+        if (active) {
+          setLoading(false);
+        }
       }
     };
 
     initializeAuth();
     
-    // Safety fallback: unconditionally stop loading after 2.5s
+    // Safety fallback: if anything hangs, stop loading after 8s
     fallbackTimeout = setTimeout(() => {
-      setLoading(false);
-    }, 2500);
+      if (active) {
+        console.warn("Auth initialization timed out, forcing load to finish.");
+        setLoading(false);
+      }
+    }, 8000);
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!active) return;
+      
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         const currentUser = session?.user || null;
         setUser(currentUser);
@@ -79,6 +87,7 @@ export default function App() {
     });
 
     return () => {
+      active = false;
       clearTimeout(fallbackTimeout);
       subscription.unsubscribe();
     };
